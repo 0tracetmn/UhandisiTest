@@ -289,19 +289,17 @@ export const BookClass: React.FC = () => {
 
         if (bookingError) throw bookingError;
 
-        // Insert subjects (primary + additional) with individual durations
+        // Insert subjects (primary + additional)
         const subjectInserts = [
           {
             booking_id: bookingId,
             service_id: selectedService.id,
             subject_order: 1,
-            duration_minutes: bookingForm.durationMinutes,
           },
           ...bookingForm.additionalSubjects.map((subj, index) => ({
             booking_id: bookingId,
             service_id: subj.serviceId,
             subject_order: index + 2,
-            duration_minutes: subj.durationMinutes,
           }))
         ];
 

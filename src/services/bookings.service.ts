@@ -20,7 +20,6 @@ export const bookingsService = {
           id,
           service_id,
           subject_order,
-          duration_minutes,
           service:tutoring_services!service_id(name)
         )
       `)
@@ -158,7 +157,6 @@ export const bookingsService = {
         serviceId: bs.service_id,
         subjectName: bs.service?.name || '',
         subjectOrder: bs.subject_order,
-        durationMinutes: bs.duration_minutes,
       })),
       sessionType: booking.session_type,
       classType: booking.class_type || 'one-on-one',

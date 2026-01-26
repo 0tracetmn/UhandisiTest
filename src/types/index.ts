@@ -64,7 +64,6 @@ export interface BookingSubject {
   serviceId: string;
   subjectName: string;
   subjectOrder: number;
-  durationMinutes?: number;
 }
 
 export interface Booking {

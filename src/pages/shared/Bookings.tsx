@@ -408,14 +408,6 @@ export const Bookings: React.FC = () => {
                               .map((s, idx) => (
                                 <div key={s.id} className="text-sm">
                                   <span className="font-medium">#{idx + 1}</span> {s.subjectName}
-                                  {s.durationMinutes && (
-                                    <span className="text-slate-600 ml-2">
-                                      ({s.durationMinutes >= 60
-                                        ? `${Math.floor(s.durationMinutes / 60)}h${s.durationMinutes % 60 > 0 ? ` ${s.durationMinutes % 60}min` : ''}`
-                                        : `${s.durationMinutes}min`
-                                      })
-                                    </span>
-                                  )}
                                 </div>
                               ))}
                           </div>
@@ -426,15 +418,13 @@ export const Bookings: React.FC = () => {
                         {new Date(booking.preferredDate).toLocaleDateString()} at{' '}
                         {booking.preferredTime}
                       </p>
-                      {booking.subjects && booking.subjects.length > 0 && (
+                      {booking.durationMinutes && (
                         <p className="text-slate-600">
-                          <span className="font-medium">Total Duration:</span>{' '}
-                          {(() => {
-                            const total = booking.subjects.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
-                            return total >= 60
-                              ? `${Math.floor(total / 60)} hour${Math.floor(total / 60) > 1 ? 's' : ''}${total % 60 > 0 ? ` ${total % 60} min` : ''}`
-                              : `${total} minutes`;
-                          })()}
+                          <span className="font-medium">Duration:</span>{' '}
+                          {booking.durationMinutes >= 60
+                            ? `${Math.floor(booking.durationMinutes / 60)} hour${Math.floor(booking.durationMinutes / 60) > 1 ? 's' : ''}${booking.durationMinutes % 60 > 0 ? ` ${booking.durationMinutes % 60} min` : ''}`
+                            : `${booking.durationMinutes} minutes`
+                          }
                         </p>
                       )}
                       {booking.curriculum && (
@@ -778,27 +768,19 @@ export const Bookings: React.FC = () => {
                                 #{index + 1} {subject.subjectName}
                               </span>
                             </div>
-                            {subject.durationMinutes && (
-                              <span className="text-sm text-slate-600">
-                                {subject.durationMinutes >= 60
-                                  ? `${Math.floor(subject.durationMinutes / 60)}h${subject.durationMinutes % 60 > 0 ? ` ${subject.durationMinutes % 60}min` : ''}`
-                                  : `${subject.durationMinutes}min`
-                                }
-                              </span>
-                            )}
                           </div>
                         ))}
-                      <div className="flex items-center justify-between p-2 bg-blue-50 rounded border border-blue-200 font-semibold">
-                        <span className="text-sm text-slate-900">Total Duration:</span>
-                        <span className="text-sm text-slate-900">
-                          {(() => {
-                            const total = selectedBooking.subjects.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
-                            return total >= 60
-                              ? `${Math.floor(total / 60)} hour${Math.floor(total / 60) > 1 ? 's' : ''}${total % 60 > 0 ? ` ${total % 60} min` : ''}`
-                              : `${total} minutes`;
-                          })()}
-                        </span>
-                      </div>
+                      {selectedBooking.durationMinutes && (
+                        <div className="flex items-center justify-between p-2 bg-blue-50 rounded border border-blue-200 font-semibold">
+                          <span className="text-sm text-slate-900">Duration:</span>
+                          <span className="text-sm text-slate-900">
+                            {selectedBooking.durationMinutes >= 60
+                              ? `${Math.floor(selectedBooking.durationMinutes / 60)} hour${Math.floor(selectedBooking.durationMinutes / 60) > 1 ? 's' : ''}${selectedBooking.durationMinutes % 60 > 0 ? ` ${selectedBooking.durationMinutes % 60} min` : ''}`
+                              : `${selectedBooking.durationMinutes} minutes`
+                            }
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
