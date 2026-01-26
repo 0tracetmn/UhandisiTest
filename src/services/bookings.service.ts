@@ -55,7 +55,6 @@ export const bookingsService = {
             id,
             service_id,
             subject_order,
-            duration_minutes,
             service:tutoring_services!service_id(name)
           )
         `)
@@ -83,7 +82,6 @@ export const bookingsService = {
             id,
             service_id,
             subject_order,
-            duration_minutes,
             service:tutoring_services!service_id(name)
           )
         `)

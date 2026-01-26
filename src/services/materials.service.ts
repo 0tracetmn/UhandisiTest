@@ -134,32 +134,19 @@ export const materialsService = {
   async getSignedUrl(filePath: string, download: boolean = false): Promise<string> {
     console.log('Getting URL for path:', filePath, 'download:', download);
 
-    if (download) {
-      const { data, error } = await supabase.storage
-        .from('materials')
-        .createSignedUrl(filePath, 3600, {
-          download: download,
-        });
-
-      if (error) {
-        console.error('Error creating signed URL:', error);
-        throw error;
-      }
-
-      console.log('Signed URL created for download:', data.signedUrl);
-      return data.signedUrl;
-    } else {
-      const { data } = supabase.storage
-        .from('materials')
-        .getPublicUrl(filePath);
-
-      console.log('Public URL details:', {
-        inputPath: filePath,
-        generatedUrl: data.publicUrl,
-        bucket: 'materials'
+    const { data, error } = await supabase.storage
+      .from('materials')
+      .createSignedUrl(filePath, 3600, {
+        download: download,
       });
-      return data.publicUrl;
+
+    if (error) {
+      console.error('Error creating signed URL:', error);
+      throw error;
     }
+
+    console.log('Signed URL created:', data.signedUrl);
+    return data.signedUrl;
   },
 
   async delete(materialId: string): Promise<void> {

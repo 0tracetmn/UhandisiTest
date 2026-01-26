@@ -362,27 +362,26 @@ export const Materials: React.FC = () => {
                       <p>Size: {formatFileSize(material.fileSize)}</p>
                       <p>Uploaded by: {material.uploaderName}</p>
                     </div>
-                    {user?.role === 'student' ? (
+                    <div className="flex gap-2">
                       <Button
                         size="sm"
                         variant="outline"
-                        className="w-full"
+                        className="flex-1"
                         onClick={() => handleView(material)}
                       >
                         <Eye className="w-4 h-4 mr-2" />
                         View
                       </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => handleDownload(material)}
-                      >
-                        <Download className="w-4 h-4 mr-2" />
-                        Download
-                      </Button>
-                    )}
+                      {user?.role === 'admin' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDownload(material)}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardBody>
@@ -466,10 +465,12 @@ export const Materials: React.FC = () => {
                   <div className="flex flex-col items-center justify-center h-full p-8 text-center">
                     <FileText className="w-16 h-16 text-slate-300 mb-4" />
                     <p className="text-slate-600 mb-4">Unable to display PDF in browser</p>
-                    <Button onClick={() => selectedMaterial && handleDownload(selectedMaterial)}>
-                      <Download className="w-4 h-4 mr-2" />
-                      Download PDF
-                    </Button>
+                    {user?.role === 'admin' && (
+                      <Button onClick={() => selectedMaterial && handleDownload(selectedMaterial)}>
+                        <Download className="w-4 h-4 mr-2" />
+                        Download PDF
+                      </Button>
+                    )}
                   </div>
                 </object>
               )}
