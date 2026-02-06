@@ -8,6 +8,7 @@ import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
 import { FileUpload } from '../../components/ui/FileUpload';
 import { Badge } from '../../components/ui/Badge';
+import { PDFViewer } from '../../components/ui/PDFViewer';
 import { FileText, Video, Image, Download, Plus, Search, Eye, X, Maximize2, Minimize2 } from 'lucide-react';
 import { Material, MaterialType } from '../../types';
 
@@ -144,19 +145,20 @@ export const Materials: React.FC = () => {
       const publicUrl = await materialsService.getSignedUrl(material.fileUrl, false);
       console.log('Public URL received:', publicUrl);
 
-      if (material.type === 'note') {
-        console.log('Fetching file as blob for:', material.type);
-        const response = await fetch(publicUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
-        }
-        const blob = await response.blob();
-        console.log('Blob created:', blob.type, blob.size);
-        const blobUrl = URL.createObjectURL(blob);
-        setViewerUrl(blobUrl);
-      } else {
-        setViewerUrl(publicUrl);
+      // Fetch the file as a blob to bypass X-Frame-Options restrictions
+      console.log('Fetching file as blob...');
+      const response = await fetch(publicUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
       }
+
+      const blob = await response.blob();
+      console.log('Blob created:', blob.type, blob.size);
+
+      // Create a blob URL for local viewing
+      const blobUrl = URL.createObjectURL(blob);
+      console.log('Blob URL created:', blobUrl);
+      setViewerUrl(blobUrl);
     } catch (error: any) {
       console.error('Failed to load material:', error);
       const errorMessage = error?.message || 'Unknown error occurred';
@@ -202,6 +204,7 @@ export const Materials: React.FC = () => {
     if (document.fullscreenElement) {
       document.exitFullscreen();
     }
+    // Clean up blob URL to prevent memory leaks
     if (viewerUrl && viewerUrl.startsWith('blob:')) {
       URL.revokeObjectURL(viewerUrl);
     }
@@ -423,59 +426,91 @@ export const Materials: React.FC = () => {
             </div>
           ) : (
             <>
-              {selectedMaterial?.type === 'video' ? (
-                <video
-                  src={viewerUrl}
-                  controls
-                  controlsList="nodownload"
-                  className="w-full rounded-lg bg-black"
-                  style={{ maxHeight: isFullscreen ? '100vh' : '70vh' }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  onError={(e) => {
-                    const video = e.target as HTMLVideoElement;
-                    console.error('Video loading error:', {
-                      error: video.error,
-                      code: video.error?.code,
-                      message: video.error?.message,
-                      src: viewerUrl
-                    });
-                  }}
-                  onLoadedMetadata={() => console.log('Video metadata loaded successfully')}
-                >
-                  <source src={viewerUrl} type="video/mp4" />
-                  <source src={viewerUrl} type="video/webm" />
-                  Your browser does not support the video tag.
-                </video>
-              ) : selectedMaterial?.type === 'diagram' ? (
-                <img
-                  src={viewerUrl}
-                  alt={selectedMaterial.title}
-                  className="w-full rounded-lg"
-                  style={{ maxHeight: isFullscreen ? '100vh' : '70vh', objectFit: 'contain' }}
-                  onContextMenu={(e) => e.preventDefault()}
-                />
-              ) : (
-                <object
-                  data={`${viewerUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-                  type="application/pdf"
-                  className="w-full rounded-lg border border-slate-200"
-                  style={{ height: isFullscreen ? '95vh' : '70vh' }}
-                  title={selectedMaterial?.title}
-                >
-                  <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+              {(() => {
+                if (!selectedMaterial) return null;
+
+                const fileExt = materialsService.getFileExtension(selectedMaterial.fileName);
+                const canDisplay = materialsService.canDisplayInline(selectedMaterial.fileName);
+
+                // Handle videos
+                if (selectedMaterial.type === 'video' || ['mp4', 'webm'].includes(fileExt)) {
+                  return (
+                    <video
+                      src={viewerUrl}
+                      controls
+                      controlsList="nodownload"
+                      className="w-full rounded-lg bg-black"
+                      style={{ maxHeight: isFullscreen ? '100vh' : '70vh' }}
+                      onContextMenu={(e) => e.preventDefault()}
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  );
+                }
+
+                // Handle images
+                if (selectedMaterial.type === 'diagram' || ['jpg', 'jpeg', 'png', 'gif'].includes(fileExt)) {
+                  return (
+                    <img
+                      src={viewerUrl}
+                      alt={selectedMaterial.title}
+                      className="w-full rounded-lg"
+                      style={{ maxHeight: isFullscreen ? '100vh' : '70vh', objectFit: 'contain' }}
+                      onContextMenu={(e) => e.preventDefault()}
+                    />
+                  );
+                }
+
+                // Handle PDFs
+                if (fileExt === 'pdf') {
+                  return <PDFViewer url={viewerUrl} isFullscreen={isFullscreen} />;
+                }
+
+                // Handle Word documents and other office formats
+                if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(fileExt)) {
+                  return (
+                    <div className="flex flex-col items-center justify-center h-96 p-8 text-center">
+                      <FileText className="w-16 h-16 text-blue-500 mb-4" />
+                      <p className="text-slate-900 font-medium mb-2 text-lg">
+                        {selectedMaterial.title}
+                      </p>
+                      <p className="text-slate-600 mb-4">
+                        Word documents cannot be previewed online due to browser security restrictions.
+                      </p>
+                      {user?.role === 'admin' && (
+                        <Button onClick={() => handleDownload(selectedMaterial)}>
+                          <Download className="w-4 h-4 mr-2" />
+                          Download to View
+                        </Button>
+                      )}
+                      {user?.role !== 'admin' && (
+                        <p className="text-sm text-slate-500">
+                          Please contact your admin to access this document.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Unsupported file type
+                return (
+                  <div className="flex flex-col items-center justify-center h-96 p-8 text-center">
                     <FileText className="w-16 h-16 text-slate-300 mb-4" />
-                    <p className="text-slate-600 mb-4">Unable to display PDF in browser</p>
+                    <p className="text-slate-900 font-medium mb-2">Cannot preview this file type</p>
+                    <p className="text-slate-600 mb-4">
+                      Files with .{fileExt} extension cannot be viewed online.
+                    </p>
                     {user?.role === 'admin' && (
-                      <Button onClick={() => selectedMaterial && handleDownload(selectedMaterial)}>
+                      <Button onClick={() => handleDownload(selectedMaterial)}>
                         <Download className="w-4 h-4 mr-2" />
-                        Download PDF
+                        Download File
                       </Button>
                     )}
                   </div>
-                </object>
-              )}
+                );
+              })()}
               {!isFullscreen && (
-                <div className="text-sm text-slate-600">
+                <div className="text-sm text-slate-600 mt-4">
                   <p className="font-medium">{selectedMaterial?.description}</p>
                   {selectedMaterial?.subject && (
                     <p className="mt-2">Subject: {selectedMaterial.subject}</p>

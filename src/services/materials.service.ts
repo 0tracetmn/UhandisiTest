@@ -134,19 +134,55 @@ export const materialsService = {
   async getSignedUrl(filePath: string, download: boolean = false): Promise<string> {
     console.log('Getting URL for path:', filePath, 'download:', download);
 
-    const { data, error } = await supabase.storage
-      .from('materials')
-      .createSignedUrl(filePath, 3600, {
-        download: download,
-      });
+    if (download) {
+      // For downloads, use signed URL with download header
+      const { data, error } = await supabase.storage
+        .from('materials')
+        .createSignedUrl(filePath, 3600, {
+          download: true,
+        });
 
-    if (error) {
-      console.error('Error creating signed URL:', error);
-      throw error;
+      if (error) {
+        console.error('Error creating signed download URL:', error);
+        throw error;
+      }
+
+      console.log('Signed download URL created:', data.signedUrl);
+      return data.signedUrl;
+    } else {
+      // For viewing, use public URL (bucket is public)
+      const { data } = supabase.storage
+        .from('materials')
+        .getPublicUrl(filePath);
+
+      console.log('Public URL for viewing:', data.publicUrl);
+      return data.publicUrl;
     }
+  },
 
-    console.log('Signed URL created:', data.signedUrl);
-    return data.signedUrl;
+  getFileExtension(fileName: string): string {
+    return fileName.split('.').pop()?.toLowerCase() || '';
+  },
+
+  getMimeType(fileName: string): string {
+    const ext = this.getFileExtension(fileName);
+    const mimeTypes: Record<string, string> = {
+      'pdf': 'application/pdf',
+      'doc': 'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'mp4': 'video/mp4',
+      'webm': 'video/webm',
+    };
+    return mimeTypes[ext] || 'application/octet-stream';
+  },
+
+  canDisplayInline(fileName: string): boolean {
+    const ext = this.getFileExtension(fileName);
+    return ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'mp4', 'webm'].includes(ext);
   },
 
   async delete(materialId: string): Promise<void> {
