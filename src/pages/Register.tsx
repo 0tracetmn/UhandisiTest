@@ -6,6 +6,7 @@ import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import { FileUpload } from '../components/ui/FileUpload';
 import { UserRole } from '../types';
+import { formatSouthAfricanPhoneNumber, validateSouthAfricanPhoneNumber, formatPhoneNumberDisplay } from '../utils/phoneNumber';
 
 export const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -31,6 +32,18 @@ export const Register: React.FC = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  const handlePhoneNumberChange = (value: string) => {
+    const formatted = formatSouthAfricanPhoneNumber(value);
+    const display = formatPhoneNumberDisplay(formatted);
+    setFormData({ ...formData, phoneNumber: display });
+  };
+
+  const handleParentPhoneChange = (value: string) => {
+    const formatted = formatSouthAfricanPhoneNumber(value);
+    const display = formatPhoneNumberDisplay(formatted);
+    setFormData({ ...formData, parentPhone: display });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -50,12 +63,20 @@ export const Register: React.FC = () => {
         setError('Phone number is required for students');
         return;
       }
+      if (!validateSouthAfricanPhoneNumber(formData.phoneNumber)) {
+        setError('Please enter a valid South African phone number (e.g., +27 XX XXX XXXX)');
+        return;
+      }
       if (!formData.parentName) {
         setError('Parent/Guardian name is required for students');
         return;
       }
       if (!formData.parentPhone) {
         setError('Parent/Guardian contact number is required for students');
+        return;
+      }
+      if (!validateSouthAfricanPhoneNumber(formData.parentPhone)) {
+        setError('Please enter a valid South African phone number for parent/guardian (e.g., +27 XX XXX XXXX)');
         return;
       }
       if (!formData.school) {
@@ -68,6 +89,13 @@ export const Register: React.FC = () => {
       }
       if (!formData.grade) {
         setError('Grade is required for students');
+        return;
+      }
+    }
+
+    if (formData.role === 'tutor' && formData.phoneNumber) {
+      if (!validateSouthAfricanPhoneNumber(formData.phoneNumber)) {
+        setError('Please enter a valid South African phone number (e.g., +27 XX XXX XXXX)');
         return;
       }
     }
@@ -95,13 +123,13 @@ export const Register: React.FC = () => {
         password: formData.password,
         name: formData.name,
         role: formData.role,
-        phoneNumber: formData.phoneNumber || undefined,
+        phoneNumber: formData.phoneNumber ? formData.phoneNumber.replace(/\s+/g, '') : undefined,
       };
 
       if (formData.role === 'student') {
         registerData.parentName = formData.parentName;
         registerData.parentContact = formData.parentContact || undefined;
-        registerData.parentPhone = formData.parentPhone;
+        registerData.parentPhone = formData.parentPhone.replace(/\s+/g, '');
         registerData.grade = formData.grade || undefined;
         registerData.school = formData.school;
         registerData.province = formData.province;
@@ -196,7 +224,7 @@ export const Register: React.FC = () => {
               label="Phone Number"
               type="tel"
               value={formData.phoneNumber}
-              onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+              onChange={(e) => handlePhoneNumberChange(e.target.value)}
               placeholder="+27 XX XXX XXXX"
               required={formData.role === 'student'}
             />
@@ -261,9 +289,7 @@ export const Register: React.FC = () => {
                       label="Parent/Guardian Contact Number"
                       type="tel"
                       value={formData.parentPhone}
-                      onChange={(e) =>
-                        setFormData({ ...formData, parentPhone: e.target.value })
-                      }
+                      onChange={(e) => handleParentPhoneChange(e.target.value)}
                       placeholder="+27 XX XXX XXXX"
                       required
                     />
