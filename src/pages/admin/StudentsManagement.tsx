@@ -16,6 +16,7 @@ interface Student {
   school: string | null;
   province: string | null;
   parentName: string | null;
+  parentSurname: string | null;
   parentContact: string | null;
   parentPhone: string | null;
   feePayer: string | null;
@@ -42,6 +43,7 @@ export const StudentsManagement: React.FC = () => {
           school,
           province,
           parent_name,
+          parent_surname,
           parent_contact,
           parent_phone,
           fee_payer,
@@ -65,6 +67,7 @@ export const StudentsManagement: React.FC = () => {
           school: student.school || null,
           province: student.province || null,
           parentName: student.parent_name || null,
+          parentSurname: student.parent_surname || null,
           parentContact: student.parent_contact || null,
           parentPhone: student.parent_phone || null,
           feePayer: student.fee_payer || null,
@@ -246,7 +249,7 @@ export const StudentsManagement: React.FC = () => {
               </div>
             </div>
 
-            {(selectedStudent.parentName || selectedStudent.parentContact || selectedStudent.parentPhone) && (
+            {(selectedStudent.parentName || selectedStudent.parentSurname || selectedStudent.parentContact || selectedStudent.parentPhone) && (
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h3 className="font-semibold text-slate-900 text-lg mb-4 flex items-center gap-2">
                   <User className="w-5 h-5 text-blue-600" />
@@ -257,6 +260,12 @@ export const StudentsManagement: React.FC = () => {
                     <div>
                       <span className="text-sm text-slate-600">Name:</span>
                       <p className="font-medium text-slate-900">{selectedStudent.parentName}</p>
+                    </div>
+                  )}
+                  {selectedStudent.parentSurname && (
+                    <div>
+                      <span className="text-sm text-slate-600">Surname:</span>
+                      <p className="font-medium text-slate-900">{selectedStudent.parentSurname}</p>
                     </div>
                   )}
                   {selectedStudent.parentContact && (

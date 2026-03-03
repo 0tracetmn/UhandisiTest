@@ -19,6 +19,7 @@ interface RegisterData {
   role: UserRole;
   phoneNumber?: string;
   parentName?: string;
+  parentSurname?: string;
   parentContact?: string;
   parentPhone?: string;
   grade?: string;
@@ -155,6 +156,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           user_id: data.user.id,
           grade: registerData.grade || null,
           parent_name: registerData.parentName || null,
+          parent_surname: registerData.parentSurname || null,
           parent_contact: registerData.parentContact || null,
           parent_phone: registerData.parentPhone || null,
           school: registerData.school || null,

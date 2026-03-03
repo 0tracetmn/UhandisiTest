@@ -19,6 +19,7 @@ export const Register: React.FC = () => {
     phoneNumber: '',
     role: 'student' as UserRole,
     parentName: '',
+    parentSurname: '',
     parentContact: '',
     parentPhone: '',
     grade: '',
@@ -69,6 +70,10 @@ export const Register: React.FC = () => {
       }
       if (!formData.parentName) {
         setError('Parent/Guardian name is required for students');
+        return;
+      }
+      if (!formData.parentSurname) {
+        setError('Parent/Guardian surname is required for students');
         return;
       }
       if (!formData.parentPhone) {
@@ -128,6 +133,7 @@ export const Register: React.FC = () => {
 
       if (formData.role === 'student') {
         registerData.parentName = formData.parentName;
+        registerData.parentSurname = formData.parentSurname;
         registerData.parentContact = formData.parentContact || undefined;
         registerData.parentPhone = formData.parentPhone.replace(/\s+/g, '');
         registerData.grade = formData.grade || undefined;
@@ -279,18 +285,18 @@ export const Register: React.FC = () => {
                       type="text"
                       value={formData.parentName}
                       onChange={(e) => setFormData({ ...formData, parentName: e.target.value })}
-                      placeholder="Full name"
+                      placeholder="First name(s)"
                       required
                     />
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-6 mt-6">
                     <Input
-                      label="Parent/Guardian Contact Number"
-                      type="tel"
-                      value={formData.parentPhone}
-                      onChange={(e) => handleParentPhoneChange(e.target.value)}
-                      placeholder="+27 XX XXX XXXX"
+                      label="Parent/Guardian Surname"
+                      type="text"
+                      value={formData.parentSurname}
+                      onChange={(e) => setFormData({ ...formData, parentSurname: e.target.value })}
+                      placeholder="Last name"
                       required
                     />
 
@@ -304,6 +310,16 @@ export const Register: React.FC = () => {
                       placeholder="Optional"
                     />
                   </div>
+
+                  <Input
+                    label="Parent/Guardian Contact Number"
+                    type="tel"
+                    value={formData.parentPhone}
+                    onChange={(e) => handleParentPhoneChange(e.target.value)}
+                    placeholder="+27 XX XXX XXXX"
+                    required
+                    className="mt-6"
+                  />
 
                   <div className="mt-6">
                     <label className="block text-sm font-medium text-slate-700 mb-3">

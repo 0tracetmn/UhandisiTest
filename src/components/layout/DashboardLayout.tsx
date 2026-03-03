@@ -145,10 +145,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                   alt="Uhandisi Tutors"
                   className="w-10 h-10 rounded-full object-cover"
                 />
-                <div className="hidden sm:block">
-                  <h1 className="text-xl font-bold text-slate-900">Uhandisi Tutors</h1>
-                  <p className="text-xs text-slate-600">GET/FET Physics & Mathematics</p>
-                </div>
+                <h1 className="hidden sm:block text-xl font-bold text-slate-900">Uhandisi Tutors</h1>
               </div>
             </div>
 

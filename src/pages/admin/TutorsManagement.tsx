@@ -3,7 +3,7 @@ import { Card, CardBody, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
-import { Users, Mail, Phone, CheckCircle, Clock, X } from 'lucide-react';
+import { Users, Mail, Phone, CheckCircle, Clock, X, FileText, ExternalLink, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Tutor {
@@ -14,6 +14,9 @@ interface Tutor {
   phoneNumber: string | null;
   status: string;
   createdAt: string;
+  transcriptUrl: string | null;
+  qualificationsUrl: string | null;
+  idCopyUrl: string | null;
 }
 
 export const TutorsManagement: React.FC = () => {
@@ -34,6 +37,9 @@ export const TutorsManagement: React.FC = () => {
           user_id,
           status,
           created_at,
+          transcript_url,
+          qualifications_url,
+          id_copy_url,
           profiles!tutor_details_user_id_fkey(
             name,
             email,
@@ -51,6 +57,9 @@ export const TutorsManagement: React.FC = () => {
           phoneNumber: tutor.profiles?.phone_number || null,
           status: tutor.status,
           createdAt: tutor.created_at,
+          transcriptUrl: tutor.transcript_url,
+          qualificationsUrl: tutor.qualifications_url,
+          idCopyUrl: tutor.id_copy_url,
         }));
         setTutors(formattedTutors);
       }
@@ -212,6 +221,86 @@ export const TutorsManagement: React.FC = () => {
                     {selectedTutor.userId}
                   </p>
                 </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-slate-900 mb-3">Uploaded Documents</h3>
+              <div className="space-y-3">
+                {selectedTutor.transcriptUrl ? (
+                  <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-8 h-8 text-blue-600" />
+                      <div>
+                        <p className="font-medium text-slate-900">Transcript</p>
+                        <p className="text-sm text-slate-600">Academic transcript document</p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(selectedTutor.transcriptUrl!, '_blank')}
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      View
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-4 bg-slate-100 rounded-lg text-slate-500">
+                    <AlertCircle className="w-5 h-5" />
+                    <span className="text-sm font-medium">Transcript not uploaded</span>
+                  </div>
+                )}
+
+                {selectedTutor.qualificationsUrl ? (
+                  <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-8 h-8 text-green-600" />
+                      <div>
+                        <p className="font-medium text-slate-900">Qualifications</p>
+                        <p className="text-sm text-slate-600">Certificates and degrees</p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(selectedTutor.qualificationsUrl!, '_blank')}
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      View
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-4 bg-slate-100 rounded-lg text-slate-500">
+                    <AlertCircle className="w-5 h-5" />
+                    <span className="text-sm font-medium">Qualifications not uploaded</span>
+                  </div>
+                )}
+
+                {selectedTutor.idCopyUrl ? (
+                  <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-8 h-8 text-orange-600" />
+                      <div>
+                        <p className="font-medium text-slate-900">Copy of ID</p>
+                        <p className="text-sm text-slate-600">Identity verification document</p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(selectedTutor.idCopyUrl!, '_blank')}
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      View
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-4 bg-slate-100 rounded-lg text-slate-500">
+                    <AlertCircle className="w-5 h-5" />
+                    <span className="text-sm font-medium">ID copy not uploaded</span>
+                  </div>
+                )}
               </div>
             </div>
 

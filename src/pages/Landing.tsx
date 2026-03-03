@@ -50,10 +50,7 @@ export const Landing: React.FC = () => {
                 alt="Uhandisi Tutors"
                 className="w-12 h-12 rounded-full object-cover"
               />
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900">Uhandisi Tutors</h1>
-                <p className="text-xs text-slate-600">GET/FET Physics & Mathematics</p>
-              </div>
+              <h1 className="text-2xl font-bold text-slate-900">Uhandisi Tutors</h1>
             </div>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => navigate('/login')}>

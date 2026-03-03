@@ -34,6 +34,7 @@ export interface Tutor extends User {
 export interface Student extends User {
   role: 'student';
   parentName?: string;
+  parentSurname?: string;
   parentContact?: string;
   grade?: string;
 }
