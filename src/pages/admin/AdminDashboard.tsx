@@ -37,8 +37,8 @@ interface PendingGroupSession {
   id: string;
   subject: string;
   sessionType: string;
-  preferredDate: string;
-  preferredTime: string;
+  preferredDate: string | null;
+  preferredTime: string | null;
   status: string;
   currentCount: number;
   minStudents: number;
@@ -689,7 +689,7 @@ export const AdminDashboard: React.FC = () => {
                       </Badge>
                     </div>
                     <p className="text-sm text-slate-600 mt-2">
-                      {new Date(groupSession.preferredDate).toLocaleDateString()} at {groupSession.preferredTime}
+                      <strong>Date/Time:</strong> TBD - Set by admin
                     </p>
                     <p className="text-sm text-slate-500 capitalize">
                       {groupSession.sessionType.replace('_', ' ')}
@@ -1088,7 +1088,7 @@ export const AdminDashboard: React.FC = () => {
                 <div>
                   <span className="text-sm text-slate-600">Date & Time:</span>
                   <p className="font-medium text-slate-900">
-                    {new Date(selectedGroupSession.preferredDate).toLocaleDateString()} at {selectedGroupSession.preferredTime}
+                    TBD - You will notify students via notifications
                   </p>
                 </div>
                 <div>

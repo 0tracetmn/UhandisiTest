@@ -323,8 +323,11 @@ export const Bookings: React.FC = () => {
                       </p>
                       <p className="text-slate-600">
                         <span className="font-medium">Date:</span>{' '}
-                        {new Date(groupSession.preferredDate).toLocaleDateString()} at{' '}
-                        {groupSession.preferredTime}
+                        {groupSession.preferredDate ? (
+                          `${new Date(groupSession.preferredDate).toLocaleDateString()} ${groupSession.preferredTime ? `at ${groupSession.preferredTime}` : ''}`
+                        ) : (
+                          <span className="text-orange-600 font-medium">TBD - Admin will notify</span>
+                        )}
                       </p>
                       <p className="text-slate-600">
                         <span className="font-medium">Session:</span>{' '}
@@ -529,12 +532,16 @@ export const Bookings: React.FC = () => {
                 <div>
                   <span className="text-sm text-slate-600">Date & Time:</span>
                   <p className="font-medium text-slate-900">
-                    {new Date(selectedGroupSession.preferredDate).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })} at {selectedGroupSession.preferredTime}
+                    {selectedGroupSession.preferredDate ? (
+                      `${new Date(selectedGroupSession.preferredDate).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })} ${selectedGroupSession.preferredTime ? `at ${selectedGroupSession.preferredTime}` : ''}`
+                    ) : (
+                      <span className="text-orange-600 font-medium">TBD - Admin will notify you</span>
+                    )}
                   </p>
                 </div>
                 <div>

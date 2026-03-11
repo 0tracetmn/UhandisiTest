@@ -115,17 +115,17 @@ export const BookClass: React.FC = () => {
   const handleSubmitBooking = async () => {
     if (!selectedService || !user?.id) return;
 
-    if (!bookingForm.preferredDate) {
-      alert('Please select a date for your session');
-      return;
-    }
-
-    if (bookingForm.classType !== 'group' && !bookingForm.preferredTime) {
-      alert('Please select a time for your session');
-      return;
-    }
-
     if (bookingForm.classType === 'one-on-one') {
+      if (!bookingForm.preferredDate) {
+        alert('Please select a date for your session');
+        return;
+      }
+
+      if (!bookingForm.preferredTime) {
+        alert('Please select a time for your session');
+        return;
+      }
+
       if (!bookingForm.curriculum) {
         alert('Please select your curriculum');
         return;
@@ -150,18 +150,13 @@ export const BookClass: React.FC = () => {
 
     try {
       if (classType === 'group') {
-        // Handle group booking - find or create group session
-        // For group sessions, time will be assigned later by admin
-        const preferredTime = bookingForm.preferredTime || null;
-
+        // Handle group booking - match by subject only, admin will set dates
         const { data: existingSession, error: findError } = await supabase
           .from('group_sessions')
           .select('*')
           .eq('subject', selectedService.name)
           .eq('service_id', selectedService.id)
           .eq('session_type', sessionType)
-          .eq('preferred_date', bookingForm.preferredDate)
-          .is('preferred_time', null)
           .in('status', ['forming', 'ready'])
           .maybeSingle();
 
@@ -182,39 +177,87 @@ export const BookClass: React.FC = () => {
             .maybeSingle();
 
           if (existingParticipant) {
-            alert('You have already joined this group session!');
+            alert('You have already joined this group session for ' + selectedService.name + '!');
             setSubmitting(false);
             return;
           }
 
-          // Check if session is full
+          // Check if session is full (max 50 students)
           if (existingSession.current_count >= existingSession.max_students) {
-            alert('This group session is already full. Please try a different time.');
+            alert('This group session is already full (50 students maximum). A new group will be created for you.');
+            // Don't return - create a new session instead
+          } else {
+            // Join the existing session
+            const { error: participantError } = await supabase
+              .from('group_session_participants')
+              .insert({
+                group_session_id: groupSessionId,
+                student_id: user.id,
+                notes: bookingForm.notes,
+              });
+
+            if (participantError) throw participantError;
+
+            // Create booking record linked to group session
+            const { error: bookingError } = await supabase
+              .from('bookings')
+              .insert({
+                student_id: user.id,
+                service_id: selectedService.id,
+                subject: selectedService.name,
+                delivery_mode: bookingForm.deliveryMode,
+                preferred_date: null,
+                preferred_time: null,
+                notes: bookingForm.notes,
+                status: 'pending',
+                session_type: sessionType,
+                class_type: 'group',
+                group_session_id: groupSessionId,
+              });
+
+            if (bookingError) throw bookingError;
+
+            setIsBookingModalOpen(false);
+            setSelectedService(null);
+            setBookingForm({
+              deliveryMode: 'online',
+              classType: 'one-on-one',
+              preferredDate: '',
+              preferredTime: '',
+              notes: '',
+              curriculum: '',
+              durationMinutes: 60,
+              additionalSubjects: [],
+              capeTownAcknowledgement: false,
+            });
             setSubmitting(false);
+
+            setTimeout(() => {
+              alert('Successfully joined group session for ' + selectedService.name + '! The admin will notify you of the session dates and times according to the set timetable.');
+            }, 300);
             return;
           }
-        } else {
-          // Create new group session
-          // Generate ID client-side to avoid RLS issues with .select()
-          groupSessionId = crypto.randomUUID();
-
-          const { error: createError } = await supabase
-            .from('group_sessions')
-            .insert({
-              id: groupSessionId,
-              subject: selectedService.name,
-              service_id: selectedService.id,
-              session_type: sessionType,
-              preferred_date: bookingForm.preferredDate,
-              preferred_time: preferredTime,
-              status: 'forming',
-              min_students: 3,
-              max_students: 40,
-              current_count: 0,
-            });
-
-          if (createError) throw createError;
         }
+
+        // Create new group session (either no existing session or existing one is full)
+        groupSessionId = crypto.randomUUID();
+
+        const { error: createError } = await supabase
+          .from('group_sessions')
+          .insert({
+            id: groupSessionId,
+            subject: selectedService.name,
+            service_id: selectedService.id,
+            session_type: sessionType,
+            preferred_date: null,
+            preferred_time: null,
+            status: 'forming',
+            min_students: 3,
+            max_students: 50,
+            current_count: 0,
+          });
+
+        if (createError) throw createError;
 
         // Add student to group session participants
         const { error: participantError } = await supabase
@@ -235,7 +278,7 @@ export const BookClass: React.FC = () => {
             service_id: selectedService.id,
             subject: selectedService.name,
             delivery_mode: bookingForm.deliveryMode,
-            preferred_date: bookingForm.preferredDate,
+            preferred_date: null,
             preferred_time: null,
             notes: bookingForm.notes,
             status: 'pending',
@@ -263,7 +306,7 @@ export const BookClass: React.FC = () => {
         setSubmitting(false);
 
         setTimeout(() => {
-          alert('Successfully joined group session! You will be notified once enough students join and a tutor is assigned.');
+          alert('Successfully joined group session for ' + selectedService.name + '! The admin will notify you of the session dates and times according to the set timetable.');
         }, 300);
       } else {
         // Handle one-on-one booking
@@ -473,7 +516,7 @@ export const BookClass: React.FC = () => {
               {bookingForm.classType === 'group' && (
                 <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm text-green-800">
-                    <strong>Group Session:</strong> Select your preferred date and the session time will be communicated to you based on our set timetable. You'll be placed with other students booking the same subject. Minimum of 3 students required, maximum of 40 per group.
+                    <strong>Group Session:</strong> You'll be placed with other students learning the same subject. The admin will notify you of session dates and times according to the set timetable. Minimum of 3 students required, maximum of 50 per group.
                   </p>
                 </div>
               )}
@@ -548,19 +591,21 @@ export const BookClass: React.FC = () => {
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Preferred Start Date *
-              </label>
-              <input
-                type="date"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={bookingForm.preferredDate}
-                onChange={(e) => setBookingForm({ ...bookingForm, preferredDate: e.target.value })}
-                min={new Date().toISOString().split('T')[0]}
-                required
-              />
-            </div>
+            {bookingForm.classType === 'one-on-one' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Preferred Start Date *
+                </label>
+                <input
+                  type="date"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={bookingForm.preferredDate}
+                  onChange={(e) => setBookingForm({ ...bookingForm, preferredDate: e.target.value })}
+                  min={new Date().toISOString().split('T')[0]}
+                  required
+                />
+              </div>
+            )}
 
             {bookingForm.classType === 'one-on-one' && (
               <>
