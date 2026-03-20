@@ -3,7 +3,7 @@ import { Card, CardBody, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
-import { Users, Calendar, TrendingUp, CheckCircle, Clock, FileText, ExternalLink, AlertCircle, X, UserCheck } from 'lucide-react';
+import { Users, Calendar, TrendingUp, CheckCircle, Clock, FileText, ExternalLink, AlertCircle, X, UserCheck, UserMinus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface PendingTutor {
@@ -53,6 +53,15 @@ interface AvailableTutor {
   isAvailable: boolean;
 }
 
+interface SessionParticipant {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  notes: string | null;
+  joinedAt: string;
+}
+
 export const AdminDashboard: React.FC = () => {
   const [pendingTutors, setPendingTutors] = useState<PendingTutor[]>([]);
   const [selectedTutor, setSelectedTutor] = useState<PendingTutor | null>(null);
@@ -63,6 +72,10 @@ export const AdminDashboard: React.FC = () => {
   const [availableTutors, setAvailableTutors] = useState<AvailableTutor[]>([]);
   const [selectedTutorsForBooking, setSelectedTutorsForBooking] = useState<string[]>([]);
   const [selectedTutorsForGroup, setSelectedTutorsForGroup] = useState<string[]>([]);
+  const [manageStudentsSession, setManageStudentsSession] = useState<PendingGroupSession | null>(null);
+  const [sessionParticipants, setSessionParticipants] = useState<SessionParticipant[]>([]);
+  const [participantsLoading, setParticipantsLoading] = useState(false);
+  const [removeStudentLoading, setRemoveStudentLoading] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [totalUsers, setTotalUsers] = useState(0);
@@ -465,6 +478,80 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const openManageStudentsModal = async (groupSession: PendingGroupSession) => {
+    setManageStudentsSession(groupSession);
+    setSessionParticipants([]);
+    setParticipantsLoading(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('group_session_participants')
+        .select('id, student_id, notes, joined_at, profiles:student_id(name, email)')
+        .eq('group_session_id', groupSession.id)
+        .order('joined_at', { ascending: true });
+
+      if (error) throw error;
+
+      const formatted: SessionParticipant[] = (data || []).map((p: any) => ({
+        id: p.id,
+        studentId: p.student_id,
+        studentName: p.profiles?.name || 'Unknown',
+        studentEmail: p.profiles?.email || '',
+        notes: p.notes,
+        joinedAt: p.joined_at,
+      }));
+      setSessionParticipants(formatted);
+    } catch (error) {
+      console.error('Failed to fetch participants:', error);
+      alert('Failed to load students. Please try again.');
+    } finally {
+      setParticipantsLoading(false);
+    }
+  };
+
+  const handleRemoveStudentFromGroup = async (participant: SessionParticipant) => {
+    if (!manageStudentsSession) return;
+    if (!confirm(`Are you sure you want to remove ${participant.studentName} from this group session? Their booking will be marked as cancelled.`)) {
+      return;
+    }
+
+    setRemoveStudentLoading(participant.id);
+    try {
+      const { error: deleteError } = await supabase
+        .from('group_session_participants')
+        .delete()
+        .eq('id', participant.id);
+
+      if (deleteError) throw deleteError;
+
+      await supabase
+        .from('bookings')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('student_id', participant.studentId)
+        .eq('class_type', 'group')
+        .or(`group_session_id.eq.${manageStudentsSession.id},group_id.eq.${manageStudentsSession.id}`);
+
+      setSessionParticipants(prev => prev.filter(p => p.id !== participant.id));
+      setPendingGroupSessions(prev =>
+        prev.map(gs =>
+          gs.id === manageStudentsSession.id
+            ? { ...gs, currentCount: Math.max(gs.currentCount - 1, 0) }
+            : gs
+        )
+      );
+      setManageStudentsSession(prev =>
+        prev ? { ...prev, currentCount: Math.max(prev.currentCount - 1, 0) } : null
+      );
+
+      alert(`${participant.studentName} has been removed from the group session.`);
+    } catch (error) {
+      console.error('Failed to remove student:', error);
+      alert('Failed to remove student. Please try again.');
+    } finally {
+      setRemoveStudentLoading(null);
+    }
+  };
+
   const stats = [
     {
       label: 'Total Users',
@@ -709,6 +796,14 @@ export const AdminDashboard: React.FC = () => {
                     </p>
                   </div>
                   <div className="flex gap-2 ml-4">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openManageStudentsModal(groupSession)}
+                    >
+                      <Users className="w-4 h-4 mr-1" />
+                      Manage Students
+                    </Button>
                     {groupSession.status === 'ready' ? (
                       <>
                         <Button
@@ -1184,6 +1279,107 @@ export const AdminDashboard: React.FC = () => {
                 disabled={actionLoading}
               >
                 Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={!!manageStudentsSession}
+        onClose={() => {
+          setManageStudentsSession(null);
+          setSessionParticipants([]);
+        }}
+        title={`Manage Students — ${manageStudentsSession?.subject || ''}`}
+        size="lg"
+      >
+        {manageStudentsSession && (
+          <div className="space-y-5">
+            <div className="bg-slate-50 p-4 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-blue-100 p-2 rounded-lg">
+                    <Users className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900">{manageStudentsSession.subject}</h3>
+                    <p className="text-sm text-slate-500 capitalize">
+                      {manageStudentsSession.sessionType.replace('_', ' ')}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-slate-900">
+                    {manageStudentsSession.currentCount}
+                    <span className="text-sm font-normal text-slate-500"> / {manageStudentsSession.maxStudents}</span>
+                  </p>
+                  <p className="text-xs text-slate-500">Min: {manageStudentsSession.minStudents} students</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-sm font-medium text-slate-700 mb-3">
+                Enrolled Students ({sessionParticipants.length})
+              </h4>
+
+              {participantsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : sessionParticipants.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 rounded-lg">
+                  <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <p className="text-slate-500 text-sm">No students have joined this group session yet</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {sessionParticipants.map((participant) => (
+                    <div
+                      key={participant.id}
+                      className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg hover:border-slate-300 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 truncate">{participant.studentName}</p>
+                        <p className="text-sm text-slate-500 truncate">{participant.studentEmail}</p>
+                        <div className="flex items-center gap-3 mt-1">
+                          <p className="text-xs text-slate-400">
+                            Joined: {new Date(participant.joinedAt).toLocaleDateString()}
+                          </p>
+                          {participant.notes && (
+                            <p className="text-xs text-slate-400 italic truncate max-w-[200px]">
+                              "{participant.notes}"
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleRemoveStudentFromGroup(participant)}
+                        isLoading={removeStudentLoading === participant.id}
+                        disabled={removeStudentLoading !== null}
+                        className="ml-3 flex-shrink-0"
+                      >
+                        <UserMinus className="w-4 h-4 mr-1" />
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-slate-200">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setManageStudentsSession(null);
+                  setSessionParticipants([]);
+                }}
+              >
+                Close
               </Button>
             </div>
           </div>

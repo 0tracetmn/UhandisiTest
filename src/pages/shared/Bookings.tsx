@@ -8,8 +8,16 @@ import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
-import { Calendar, Plus, Search, User, Users, Link, ExternalLink } from 'lucide-react';
+import { Calendar, Plus, Search, User, Users, Link, ExternalLink, UserCheck } from 'lucide-react';
 import { Booking, GroupSession, SessionType, ClassType } from '../../types';
+import { supabase } from '../../lib/supabase';
+
+interface AvailableTutor {
+  id: string;
+  name: string;
+  email: string;
+  isAvailable: boolean;
+}
 
 export const Bookings: React.FC = () => {
   const { user } = useAuth();
@@ -35,6 +43,12 @@ export const Bookings: React.FC = () => {
 
   const [meetingLinkInput, setMeetingLinkInput] = useState('');
   const [isSavingMeetingLink, setIsSavingMeetingLink] = useState(false);
+
+  const [approvalBooking, setApprovalBooking] = useState<Booking | null>(null);
+  const [approvalGroupSession, setApprovalGroupSession] = useState<GroupSession | null>(null);
+  const [availableTutors, setAvailableTutors] = useState<AvailableTutor[]>([]);
+  const [selectedTutorsForApproval, setSelectedTutorsForApproval] = useState<string[]>([]);
+  const [approvalLoading, setApprovalLoading] = useState(false);
 
   useEffect(() => {
     fetchBookings();
@@ -210,6 +224,210 @@ export const Bookings: React.FC = () => {
     }
   };
 
+  const openBookingApprovalModal = async (booking: Booking) => {
+    setApprovalBooking(booking);
+    setSelectedTutorsForApproval([]);
+
+    try {
+      const bookingDate = new Date(booking.preferredDate);
+      const dayOfWeek = bookingDate.getDay();
+      const bookingTime = booking.preferredTime;
+
+      const { data: tutorsData } = await supabase
+        .from('profiles')
+        .select('id, name, email')
+        .eq('role', 'tutor');
+
+      if (!tutorsData) {
+        setAvailableTutors([]);
+        return;
+      }
+
+      const tutorsWithAvailability = await Promise.all(
+        tutorsData.map(async (tutor) => {
+          const { data: availability } = await supabase
+            .from('tutor_availability')
+            .select('*')
+            .eq('tutor_id', tutor.id)
+            .eq('day_of_week', dayOfWeek)
+            .eq('is_active', true);
+
+          const isAvailable = availability?.some((slot) => {
+            return bookingTime >= slot.start_time && bookingTime < slot.end_time;
+          }) || false;
+
+          return { id: tutor.id, name: tutor.name, email: tutor.email, isAvailable };
+        })
+      );
+
+      tutorsWithAvailability.sort((a, b) => {
+        if (a.isAvailable === b.isAvailable) return 0;
+        return a.isAvailable ? -1 : 1;
+      });
+
+      setAvailableTutors(tutorsWithAvailability);
+    } catch (error) {
+      console.error('Failed to check tutor availability:', error);
+    }
+  };
+
+  const handleApproveAndAssignBooking = async () => {
+    if (!approvalBooking || selectedTutorsForApproval.length === 0) {
+      alert('Please select at least 1 tutor to assign');
+      return;
+    }
+    if (selectedTutorsForApproval.length > 5) {
+      alert('Cannot assign more than 5 tutors to a session');
+      return;
+    }
+
+    setApprovalLoading(true);
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+      const { error: bookingError } = await supabase
+        .from('bookings')
+        .update({
+          status: 'assigned',
+          tutor_id: selectedTutorsForApproval[0],
+          tutor_assigned_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', approvalBooking.id);
+
+      if (bookingError) throw bookingError;
+
+      const tutorAssignments = selectedTutorsForApproval.map((tutorId, index) => ({
+        booking_id: approvalBooking.id,
+        tutor_id: tutorId,
+        assigned_by: currentUser?.id,
+        assignment_order: index + 1,
+      }));
+
+      const { error: assignmentError } = await supabase
+        .from('booking_tutors')
+        .insert(tutorAssignments);
+
+      if (assignmentError) throw assignmentError;
+
+      setApprovalBooking(null);
+      setSelectedTutorsForApproval([]);
+      await fetchBookings();
+      alert(`Booking approved and ${selectedTutorsForApproval.length} tutor(s) assigned!`);
+    } catch (error) {
+      console.error('Failed to approve booking:', error);
+      alert('Failed to approve booking. Please try again.');
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
+
+  const handleRejectBooking = async (bookingId: string) => {
+    if (!window.confirm('Are you sure you want to reject this booking?')) return;
+
+    setApprovalLoading(true);
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: 'rejected', updated_at: new Date().toISOString() })
+        .eq('id', bookingId);
+
+      if (error) throw error;
+      await fetchBookings();
+      alert('Booking rejected.');
+    } catch (error) {
+      console.error('Failed to reject booking:', error);
+      alert('Failed to reject booking. Please try again.');
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
+
+  const openGroupSessionApprovalModal = async (groupSession: GroupSession) => {
+    setApprovalGroupSession(groupSession);
+    setSelectedTutorsForApproval([]);
+
+    const { data: tutorsData } = await supabase
+      .from('profiles')
+      .select('id, name, email')
+      .eq('role', 'tutor');
+
+    if (tutorsData) {
+      setAvailableTutors(tutorsData.map(t => ({ ...t, isAvailable: true })));
+    }
+  };
+
+  const handleApproveAndAssignGroupSession = async () => {
+    if (!approvalGroupSession || selectedTutorsForApproval.length === 0) {
+      alert('Please select at least 1 tutor to assign');
+      return;
+    }
+    if (selectedTutorsForApproval.length > 5) {
+      alert('Cannot assign more than 5 tutors to a session');
+      return;
+    }
+
+    setApprovalLoading(true);
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+      const { error: sessionError } = await supabase
+        .from('group_sessions')
+        .update({
+          status: 'approved',
+          tutor_id: selectedTutorsForApproval[0],
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', approvalGroupSession.id);
+
+      if (sessionError) throw sessionError;
+
+      const tutorAssignments = selectedTutorsForApproval.map((tutorId, index) => ({
+        group_session_id: approvalGroupSession.id,
+        tutor_id: tutorId,
+        assigned_by: currentUser?.id,
+        assignment_order: index + 1,
+      }));
+
+      const { error: assignmentError } = await supabase
+        .from('group_session_tutors')
+        .insert(tutorAssignments);
+
+      if (assignmentError) throw assignmentError;
+
+      setApprovalGroupSession(null);
+      setSelectedTutorsForApproval([]);
+      await fetchBookings();
+      alert(`Group session approved and ${selectedTutorsForApproval.length} tutor(s) assigned!`);
+    } catch (error) {
+      console.error('Failed to approve group session:', error);
+      alert('Failed to approve group session. Please try again.');
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
+
+  const handleCancelGroupSession = async (sessionId: string) => {
+    if (!window.confirm('Are you sure you want to cancel this group session?')) return;
+
+    setApprovalLoading(true);
+    try {
+      const { error } = await supabase
+        .from('group_sessions')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', sessionId);
+
+      if (error) throw error;
+      await fetchBookings();
+      alert('Group session cancelled.');
+    } catch (error) {
+      console.error('Failed to cancel group session:', error);
+      alert('Failed to cancel group session. Please try again.');
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const variants: Record<string, 'success' | 'warning' | 'info' | 'neutral' | 'danger'> = {
       pending: 'warning',
@@ -370,10 +588,20 @@ export const Bookings: React.FC = () => {
                     )}
                     {user?.role === 'admin' && groupSession.status === 'ready' && (
                       <>
-                        <Button size="sm" variant="success">
+                        <Button
+                          size="sm"
+                          variant="success"
+                          onClick={() => openGroupSessionApprovalModal(groupSession)}
+                          disabled={approvalLoading}
+                        >
                           Approve
                         </Button>
-                        <Button size="sm" variant="danger">
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => handleCancelGroupSession(groupSession.id)}
+                          disabled={approvalLoading}
+                        >
                           Cancel
                         </Button>
                       </>
@@ -483,10 +711,20 @@ export const Bookings: React.FC = () => {
                     )}
                     {user?.role === 'admin' && booking.status === 'pending' && (
                       <>
-                        <Button size="sm" variant="success">
+                        <Button
+                          size="sm"
+                          variant="success"
+                          onClick={() => openBookingApprovalModal(booking)}
+                          disabled={approvalLoading}
+                        >
                           Approve
                         </Button>
-                        <Button size="sm" variant="danger">
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => handleRejectBooking(booking.id)}
+                          disabled={approvalLoading}
+                        >
                           Reject
                         </Button>
                       </>
@@ -1023,6 +1261,318 @@ export const Bookings: React.FC = () => {
             <Button type="submit">Create Booking</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={!!approvalBooking}
+        onClose={() => {
+          setApprovalBooking(null);
+          setSelectedTutorsForApproval([]);
+        }}
+        title="Approve Booking & Assign Tutor"
+        size="lg"
+      >
+        {approvalBooking && (
+          <div className="space-y-6">
+            <div className="bg-slate-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-slate-900 mb-3">Booking Details</h3>
+              <div className="space-y-2">
+                <div>
+                  <span className="text-sm text-slate-600">Student:</span>
+                  <p className="font-medium text-slate-900">{approvalBooking.studentName}</p>
+                  {approvalBooking.studentEmail && (
+                    <p className="text-sm text-slate-600">{approvalBooking.studentEmail}</p>
+                  )}
+                </div>
+                <div>
+                  <span className="text-sm text-slate-600">Subject:</span>
+                  <p className="font-medium text-slate-900">{approvalBooking.subject}</p>
+                </div>
+                {approvalBooking.subjects && approvalBooking.subjects.length > 0 && (
+                  <div>
+                    <span className="text-sm text-slate-600">Subjects:</span>
+                    <div className="mt-1 space-y-1">
+                      {approvalBooking.subjects
+                        .sort((a, b) => a.subjectOrder - b.subjectOrder)
+                        .map((s, idx) => (
+                          <p key={s.id} className="text-sm font-medium text-slate-900">
+                            #{idx + 1} {s.subjectName}
+                          </p>
+                        ))}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <span className="text-sm text-slate-600">Date & Time:</span>
+                  <p className="font-medium text-slate-900">
+                    {new Date(approvalBooking.preferredDate).toLocaleDateString()} at {approvalBooking.preferredTime}
+                  </p>
+                </div>
+                {approvalBooking.durationMinutes && (
+                  <div>
+                    <span className="text-sm text-slate-600">Duration:</span>
+                    <p className="font-medium text-slate-900">
+                      {approvalBooking.durationMinutes >= 60
+                        ? `${Math.floor(approvalBooking.durationMinutes / 60)} hour${Math.floor(approvalBooking.durationMinutes / 60) > 1 ? 's' : ''}${approvalBooking.durationMinutes % 60 > 0 ? ` ${approvalBooking.durationMinutes % 60} min` : ''}`
+                        : `${approvalBooking.durationMinutes} minutes`}
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <span className="text-sm text-slate-600">Session Type:</span>
+                  <p className="font-medium text-slate-900 capitalize">{approvalBooking.sessionType}</p>
+                </div>
+                {approvalBooking.curriculum && (
+                  <div>
+                    <span className="text-sm text-slate-600">Curriculum:</span>
+                    <p className="font-medium text-slate-900">{approvalBooking.curriculum}</p>
+                  </div>
+                )}
+                {approvalBooking.notes && (
+                  <div>
+                    <span className="text-sm text-slate-600">Student Notes:</span>
+                    <p className="text-sm text-slate-700 italic mt-1">"{approvalBooking.notes}"</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Select Tutors to Assign (Min: 1, Max: 5)
+              </label>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm text-slate-600">
+                  {selectedTutorsForApproval.length} tutor(s) selected
+                </p>
+                {selectedTutorsForApproval.length >= 5 && (
+                  <Badge variant="warning">Maximum reached</Badge>
+                )}
+              </div>
+              <div className="space-y-2 max-h-80 overflow-y-auto border border-slate-300 rounded-lg p-3">
+                {availableTutors.length === 0 ? (
+                  <p className="text-slate-500 text-sm py-4 text-center">No tutors found</p>
+                ) : (
+                  availableTutors.map(tutor => (
+                    <label
+                      key={tutor.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                        tutor.isAvailable
+                          ? selectedTutorsForApproval.includes(tutor.id)
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-slate-200 hover:border-blue-300 bg-white'
+                          : 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed'
+                      } ${
+                        selectedTutorsForApproval.length >= 5 && !selectedTutorsForApproval.includes(tutor.id)
+                          ? 'opacity-50 cursor-not-allowed'
+                          : ''
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        value={tutor.id}
+                        checked={selectedTutorsForApproval.includes(tutor.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            if (selectedTutorsForApproval.length < 5) {
+                              setSelectedTutorsForApproval([...selectedTutorsForApproval, tutor.id]);
+                            }
+                          } else {
+                            setSelectedTutorsForApproval(selectedTutorsForApproval.filter(id => id !== tutor.id));
+                          }
+                        }}
+                        disabled={!tutor.isAvailable || (selectedTutorsForApproval.length >= 5 && !selectedTutorsForApproval.includes(tutor.id))}
+                        className="w-4 h-4"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className={`font-medium ${tutor.isAvailable ? 'text-slate-900' : 'text-slate-400'}`}>
+                            {tutor.name}
+                          </p>
+                          {tutor.isAvailable ? (
+                            <Badge variant="success">Available</Badge>
+                          ) : (
+                            <Badge variant="default">Not Available</Badge>
+                          )}
+                          {selectedTutorsForApproval.includes(tutor.id) && (
+                            <Badge variant="info">
+                              #{selectedTutorsForApproval.indexOf(tutor.id) + 1}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className={`text-sm ${tutor.isAvailable ? 'text-slate-600' : 'text-slate-400'}`}>
+                          {tutor.email}
+                        </p>
+                        {!tutor.isAvailable && (
+                          <p className="text-xs text-slate-500 mt-1">
+                            No availability set for this day/time
+                          </p>
+                        )}
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+              {availableTutors.some(t => !t.isAvailable) && (
+                <p className="text-xs text-slate-500 mt-2">
+                  Note: Grayed out tutors are not available for the selected date and time
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-4 border-t border-slate-200">
+              <Button
+                className="flex-1"
+                variant="success"
+                onClick={handleApproveAndAssignBooking}
+                isLoading={approvalLoading}
+                disabled={approvalLoading || selectedTutorsForApproval.length === 0}
+              >
+                <UserCheck className="w-4 h-4 mr-2" />
+                Approve & Assign Tutor
+              </Button>
+              <Button
+                className="flex-1"
+                variant="outline"
+                onClick={() => {
+                  setApprovalBooking(null);
+                  setSelectedTutorsForApproval([]);
+                }}
+                disabled={approvalLoading}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={!!approvalGroupSession}
+        onClose={() => {
+          setApprovalGroupSession(null);
+          setSelectedTutorsForApproval([]);
+        }}
+        title="Approve Group Session & Assign Tutor"
+        size="lg"
+      >
+        {approvalGroupSession && (
+          <div className="space-y-6">
+            <div className="bg-slate-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-slate-900 mb-3">Group Session Details</h3>
+              <div className="space-y-2">
+                <div>
+                  <span className="text-sm text-slate-600">Subject:</span>
+                  <p className="font-medium text-slate-900">{approvalGroupSession.subject}</p>
+                </div>
+                <div>
+                  <span className="text-sm text-slate-600">Participants:</span>
+                  <p className="font-medium text-slate-900">
+                    {approvalGroupSession.currentCount} students enrolled (min: {approvalGroupSession.minStudents}, max: {approvalGroupSession.maxStudents})
+                  </p>
+                </div>
+                <div>
+                  <span className="text-sm text-slate-600">Date & Time:</span>
+                  <p className="font-medium text-slate-900">
+                    {approvalGroupSession.preferredDate
+                      ? `${new Date(approvalGroupSession.preferredDate).toLocaleDateString()} ${approvalGroupSession.preferredTime ? `at ${approvalGroupSession.preferredTime}` : ''}`
+                      : 'TBD - You will notify students via notifications'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-sm text-slate-600">Session Type:</span>
+                  <p className="font-medium text-slate-900 capitalize">{approvalGroupSession.sessionType}</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Select Tutors to Assign (Min: 1, Max: 5)
+              </label>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm text-slate-600">
+                  {selectedTutorsForApproval.length} tutor(s) selected
+                </p>
+                {selectedTutorsForApproval.length >= 5 && (
+                  <Badge variant="warning">Maximum reached</Badge>
+                )}
+              </div>
+              <div className="space-y-2 max-h-80 overflow-y-auto border border-slate-300 rounded-lg p-3">
+                {availableTutors.length === 0 ? (
+                  <p className="text-slate-500 text-sm py-4 text-center">No tutors found</p>
+                ) : (
+                  availableTutors.map(tutor => (
+                    <label
+                      key={tutor.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                        selectedTutorsForApproval.includes(tutor.id)
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-slate-200 hover:border-blue-300 bg-white'
+                      } ${
+                        selectedTutorsForApproval.length >= 5 && !selectedTutorsForApproval.includes(tutor.id)
+                          ? 'opacity-50 cursor-not-allowed'
+                          : ''
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        value={tutor.id}
+                        checked={selectedTutorsForApproval.includes(tutor.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            if (selectedTutorsForApproval.length < 5) {
+                              setSelectedTutorsForApproval([...selectedTutorsForApproval, tutor.id]);
+                            }
+                          } else {
+                            setSelectedTutorsForApproval(selectedTutorsForApproval.filter(id => id !== tutor.id));
+                          }
+                        }}
+                        disabled={selectedTutorsForApproval.length >= 5 && !selectedTutorsForApproval.includes(tutor.id)}
+                        className="w-4 h-4"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-slate-900">{tutor.name}</p>
+                          {selectedTutorsForApproval.includes(tutor.id) && (
+                            <Badge variant="info">
+                              #{selectedTutorsForApproval.indexOf(tutor.id) + 1}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-slate-600">{tutor.email}</p>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4 border-t border-slate-200">
+              <Button
+                className="flex-1"
+                variant="success"
+                onClick={handleApproveAndAssignGroupSession}
+                isLoading={approvalLoading}
+                disabled={approvalLoading || selectedTutorsForApproval.length === 0}
+              >
+                <UserCheck className="w-4 h-4 mr-2" />
+                Approve & Assign Tutor
+              </Button>
+              <Button
+                className="flex-1"
+                variant="outline"
+                onClick={() => {
+                  setApprovalGroupSession(null);
+                  setSelectedTutorsForApproval([]);
+                }}
+                disabled={approvalLoading}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
