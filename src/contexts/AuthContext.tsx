@@ -120,14 +120,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const register = async (registerData: RegisterData) => {
+    const metadata: Record<string, string> = {
+      name: registerData.name,
+      role: registerData.role,
+    };
+
+    if (registerData.phoneNumber) {
+      metadata.phone_number = registerData.phoneNumber;
+    }
+
+    if (registerData.role === 'student') {
+      metadata.grade = registerData.grade || '';
+      metadata.school = registerData.school || '';
+      metadata.province = registerData.province || '';
+      metadata.parent_name = registerData.parentName || '';
+      metadata.parent_surname = registerData.parentSurname || '';
+      metadata.parent_contact = registerData.parentContact || '';
+      metadata.parent_phone = registerData.parentPhone || '';
+      metadata.fee_payer = registerData.feePayer || 'student';
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email: registerData.email,
       password: registerData.password,
       options: {
-        data: {
-          name: registerData.name,
-          role: registerData.role,
-        },
+        data: metadata,
       },
     });
 
@@ -150,24 +167,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     if (registerData.role === 'student') {
-      const { error: studentError } = await supabase
+      const { error: studentDetailsError } = await supabase
         .from('student_details')
-        .insert({
-          user_id: data.user.id,
-          grade: registerData.grade || null,
-          parent_name: registerData.parentName || null,
-          parent_surname: registerData.parentSurname || null,
-          parent_contact: registerData.parentContact || null,
-          parent_phone: registerData.parentPhone || null,
-          school: registerData.school || null,
-          province: registerData.province || null,
-          fee_payer: registerData.feePayer || 'student',
-        });
+        .upsert(
+          {
+            user_id: data.user.id,
+            grade: registerData.grade || null,
+            school: registerData.school || null,
+            province: registerData.province || null,
+            parent_name: registerData.parentName || null,
+            parent_surname: registerData.parentSurname || null,
+            parent_contact: registerData.parentContact || null,
+            parent_phone: registerData.parentPhone || null,
+            fee_payer: registerData.feePayer || 'student',
+          },
+          { onConflict: 'user_id' }
+        );
 
-      if (studentError && studentError.code !== '23505') {
-        console.error('Student details error:', studentError);
+      if (studentDetailsError) {
+        console.error('Student details save error:', studentDetailsError);
+        throw new Error(
+          'Your account was created, but we could not save your student details. Please contact support so an admin can complete your profile.'
+        );
       }
-    } else if (registerData.role === 'tutor') {
+    }
+
+    if (registerData.role === 'tutor') {
       let transcriptUrl = null;
       let qualificationsUrl = null;
       let idCopyUrl = null;
