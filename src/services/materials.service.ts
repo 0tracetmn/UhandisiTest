@@ -40,15 +40,7 @@ export const materialsService = {
     }));
   },
 
-  async getForStudent(studentId: string): Promise<Material[]> {
-    const { data: studentDetails, error: studentError } = await supabase
-      .from('student_details')
-      .select('grade')
-      .eq('user_id', studentId)
-      .maybeSingle();
-
-    if (studentError) throw studentError;
-
+  async getForStudent(_studentId: string): Promise<Material[]> {
     const { data, error } = await supabase
       .from('materials')
       .select(`
@@ -59,7 +51,7 @@ export const materialsService = {
 
     if (error) throw error;
 
-    const allMaterials = (data || []).map(material => ({
+    return (data || []).map(material => ({
       id: material.id,
       title: material.title,
       description: material.description || '',
@@ -73,25 +65,14 @@ export const materialsService = {
       grade: material.grade,
       createdAt: material.created_at,
     }));
+  },
 
-    if (!studentDetails || !studentDetails.grade) {
-      return allMaterials;
-    }
-
-    const normalizeGrade = (grade: string | undefined | null): string => {
-      if (!grade) return '';
-      const gradeStr = grade.toLowerCase().trim();
-      const match = gradeStr.match(/\d+/);
-      return match ? match[0] : gradeStr;
-    };
-
-    const studentGradeNormalized = normalizeGrade(studentDetails.grade);
-
-    return allMaterials.filter(material => {
-      if (!material.grade) return true;
-      const materialGradeNormalized = normalizeGrade(material.grade);
-      return materialGradeNormalized === studentGradeNormalized;
-    });
+  async getApprovedSubjectsForStudent(): Promise<string[]> {
+    const { data, error } = await supabase.rpc('current_user_approved_subjects');
+    if (error) throw error;
+    return (data || [])
+      .map((row: { subject: string | null }) => row.subject)
+      .filter((s: string | null): s is string => !!s);
   },
 
   async upload(file: File, metadata: {
@@ -134,30 +115,16 @@ export const materialsService = {
   async getSignedUrl(filePath: string, download: boolean = false): Promise<string> {
     console.log('Getting URL for path:', filePath, 'download:', download);
 
-    if (download) {
-      // For downloads, use signed URL with download header
-      const { data, error } = await supabase.storage
-        .from('materials')
-        .createSignedUrl(filePath, 3600, {
-          download: true,
-        });
+    const { data, error } = await supabase.storage
+      .from('materials')
+      .createSignedUrl(filePath, 3600, download ? { download: true } : undefined);
 
-      if (error) {
-        console.error('Error creating signed download URL:', error);
-        throw error;
-      }
-
-      console.log('Signed download URL created:', data.signedUrl);
-      return data.signedUrl;
-    } else {
-      // For viewing, use public URL (bucket is public)
-      const { data } = supabase.storage
-        .from('materials')
-        .getPublicUrl(filePath);
-
-      console.log('Public URL for viewing:', data.publicUrl);
-      return data.publicUrl;
+    if (error) {
+      console.error('Error creating signed URL:', error);
+      throw error;
     }
+
+    return data.signedUrl;
   },
 
   getFileExtension(fileName: string): string {

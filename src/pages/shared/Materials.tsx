@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { materialsService } from '../../services/materials.service';
 import { Card, CardBody, CardHeader } from '../../components/ui/Card';
@@ -9,7 +10,7 @@ import { Modal } from '../../components/ui/Modal';
 import { FileUpload } from '../../components/ui/FileUpload';
 import { Badge } from '../../components/ui/Badge';
 import { PDFViewer } from '../../components/ui/PDFViewer';
-import { FileText, Video, Image, Download, Plus, Search, Eye, X, Maximize2, Minimize2 } from 'lucide-react';
+import { FileText, Video, Image, Download, Plus, Search, Eye, X, Maximize2, Minimize2, Lock } from 'lucide-react';
 import { Material, MaterialType } from '../../types';
 
 interface TutoringService {
@@ -37,6 +38,7 @@ export const Materials: React.FC = () => {
   const [subjectFilter, setSubjectFilter] = useState('all');
   const [gradeFilter, setGradeFilter] = useState('all');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [approvedSubjects, setApprovedSubjects] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -49,7 +51,13 @@ export const Materials: React.FC = () => {
   useEffect(() => {
     fetchMaterials();
     fetchTutoringServices();
-  }, []);
+    if (user?.role === 'student') {
+      materialsService
+        .getApprovedSubjectsForStudent()
+        .then(setApprovedSubjects)
+        .catch((err) => console.error('Failed to fetch approved subjects:', err));
+    }
+  }, [user?.role]);
 
   useEffect(() => {
     let filtered = materials;
@@ -333,17 +341,43 @@ export const Materials: React.FC = () => {
       </Card>
 
       {filteredMaterials.length === 0 ? (
-        <Card>
-          <CardBody className="text-center py-12">
-            <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-slate-900 mb-2">No materials found</h3>
-            <p className="text-slate-600 mb-6">
-              {searchTerm || typeFilter !== 'all' || subjectFilter !== 'all' || gradeFilter !== 'all'
-                ? 'Try adjusting your filters'
-                : 'No learning materials available yet'}
-            </p>
-          </CardBody>
-        </Card>
+        user?.role === 'student' && approvedSubjects.length === 0 ? (
+          <Card>
+            <CardBody className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 mb-4">
+                <Lock className="w-8 h-8 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">
+                Materials are shared with group session students
+              </h3>
+              <p className="text-slate-600 mb-6 max-w-lg mx-auto">
+                Once you've joined a group session and an admin approves it, the notes,
+                diagrams and video lessons for that subject and grade will appear here.
+                One-on-one bookings do not include shared materials.
+              </p>
+              <Link to="/dashboard/book-class">
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Book a Group Session
+                </Button>
+              </Link>
+            </CardBody>
+          </Card>
+        ) : (
+          <Card>
+            <CardBody className="text-center py-12">
+              <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">No materials found</h3>
+              <p className="text-slate-600 mb-6">
+                {searchTerm || typeFilter !== 'all' || subjectFilter !== 'all' || gradeFilter !== 'all'
+                  ? 'Try adjusting your filters'
+                  : user?.role === 'student'
+                    ? 'No materials have been uploaded yet for your approved subjects.'
+                    : 'No learning materials available yet'}
+              </p>
+            </CardBody>
+          </Card>
+        )
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredMaterials.map((material) => (
