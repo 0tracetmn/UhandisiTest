@@ -75,6 +75,14 @@ export const materialsService = {
       .filter((s: string | null): s is string => !!s);
   },
 
+  async getAssignedSubjectsForTutor(): Promise<string[]> {
+    const { data, error } = await supabase.rpc('current_tutor_assigned_subjects');
+    if (error) throw error;
+    return (data || [])
+      .map((row: { subject: string | null }) => row.subject)
+      .filter((s: string | null): s is string => !!s);
+  },
+
   async upload(file: File, metadata: {
     title: string;
     description: string;
