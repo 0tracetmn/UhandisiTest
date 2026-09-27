@@ -10,7 +10,7 @@ import { Modal } from '../../components/ui/Modal';
 import { FileUpload } from '../../components/ui/FileUpload';
 import { Badge } from '../../components/ui/Badge';
 import { PDFViewer } from '../../components/ui/PDFViewer';
-import { FileText, Video, Image, Download, Plus, Search, Eye, X, Maximize2, Minimize2, Lock } from 'lucide-react';
+import { FileText, Video, Image, Download, Plus, Search, Eye, X, Maximize2, Minimize2, Lock, Trash2 } from 'lucide-react';
 import { Material, MaterialType } from '../../types';
 
 interface TutoringService {
@@ -181,6 +181,23 @@ export const Materials: React.FC = () => {
       setViewerModalOpen(false);
     } finally {
       setLoadingUrl(false);
+    }
+  };
+
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteMaterial = async (material: Material) => {
+    if (!window.confirm(`Delete "${material.title}"? This will permanently remove the file and cannot be undone.`)) return;
+
+    setDeletingId(material.id);
+    try {
+      await materialsService.delete(material.id);
+      await fetchMaterials();
+    } catch (error) {
+      console.error('Failed to delete material:', error);
+      alert('Failed to delete material. Please try again.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -441,6 +458,21 @@ export const Materials: React.FC = () => {
                           onClick={() => handleDownload(material)}
                         >
                           <Download className="w-4 h-4" />
+                        </Button>
+                      )}
+                      {user?.role === 'admin' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteMaterial(material)}
+                          disabled={deletingId === material.id}
+                          className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+                        >
+                          {deletingId === material.id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
                         </Button>
                       )}
                     </div>
